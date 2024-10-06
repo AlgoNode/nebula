@@ -39,6 +39,9 @@ const (
 	NetworkAvailTuringLC  Network = "AVAIL_TURING_LC"
 	NetworkAvailTuringFN  Network = "AVAIL_TURING_FN"
 	NetworkPactus         Network = "PACTUS"
+	NetworkAlgorandMainN  Network = "ALGORAND_MAINNET"
+	NetworkAlgorandTestN  Network = "ALGORAND_TESTNET"
+	NetworkAlgorandBetaN  Network = "ALGORAND_BETANET"
 )
 
 func Networks() []Network {
@@ -62,6 +65,9 @@ func Networks() []Network {
 		NetworkAvailTuringLC,
 		NetworkAvailTuringFN,
 		NetworkPactus,
+		NetworkAlgorandMainN,
+		NetworkAlgorandTestN,
+		NetworkAlgorandBetaN,
 	}
 }
 
@@ -418,6 +424,15 @@ func ConfigureNetwork(network string) (*cli.StringSlice, *cli.StringSlice, error
 	case NetworkAvailTuringFN:
 		bootstrapPeers = cli.NewStringSlice(BootstrapPeersAvailTuringFullNode...)
 		protocols = cli.NewStringSlice("/Avail/kad")
+	case NetworkAlgorandMainN:
+		bootstrapPeers = cli.NewStringSlice(BootstrapPeersAlgorandMainNet...)
+		protocols = cli.NewStringSlice("/algorand/kad/mainnet/kad/1.0.0")
+	case NetworkAlgorandTestN:
+		bootstrapPeers = cli.NewStringSlice(BootstrapPeersAlgorandTestNet...)
+		protocols = cli.NewStringSlice("/algorand/kad/testnet/kad/1.0.0")
+	case NetworkAlgorandBetaN:
+		bootstrapPeers = cli.NewStringSlice(BootstrapPeersAlgorandBetaNet...)
+		protocols = cli.NewStringSlice("/algorand/kad/betanet/kad/1.0.0")
 	case NetworkIPFS, NetworkAmino:
 		bps := []string{}
 		for _, maddr := range kaddht.DefaultBootstrapPeers {

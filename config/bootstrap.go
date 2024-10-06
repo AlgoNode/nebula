@@ -267,6 +267,33 @@ var (
 		"/dns/bootnode-turing-009.avail.so/tcp/30333/p2p/12D3KooWQLdPYPEHRGAJ4J6dGYoiKyjm36VhaSCJkvKAuJBohJYi",
 	}
 
+	BootstrapPeersAlgorandMainNet = []string{
+		"/dns4/n1-mainnet.4160.nodely.io/tcp/14190/p2p/12D3KooWBHBjCPZEkHyre4NDFyVQm4GjkN4n766RiKpESboj4jEB",
+		"/dns4/n2-mainnet.4160.nodely.net/tcp/14190/p2p/12D3KooWNdhAQA1L8pSKQ2yJViVxRb6gw1Pp2URwTzDywY4hsai5",
+		"/dns4/n3-mainnet.4160.nodely.network/tcp/14190/p2p/12D3KooWAfN4hoQwjmYG8T6mxzkYVGpa24hzx4pp5zNboiBzy8xS",
+		"/dns4/n4-mainnet.4160.nodely.dev/tcp/14190/p2p/12D3KooWH3PQB4X9783fLupxf63Y5qohtSLh3c4RoZ4Ahxg4iVWD",
+		"/dns4/r-vi.algorand-mainnet.network/tcp/4190/p2p/12D3KooWSdurxomMn38Fk6aqXY1FgWmMnththYxUXX8BNz8N5Kyk",
+		"/dns4/r-pn.algorand-mainnet.network/tcp/4190/p2p/12D3KooWAaPiWHx1CZcpZ4rQSDcpzsfMN5ecReLpWh5ZuReoxcnM",
+		"/dns4/r-ve.algorand-mainnet.network/tcp/4190/p2p/12D3KooWBusewMu14xEZQfHsCF9vnRvXwkK1wnwGK4nbrLQ3Ctoh",
+		"/dns4/r-xz.algorand-mainnet.network/tcp/4190/p2p/12D3KooWMXE12fHsnskCGtjFiiTjAAxGsTostLtXTTTbb1XSoAVM",
+		"/dns4/r-s0.algorand-mainnet.network/tcp/4190/p2p/12D3KooWRvJQUkLEMqWXkr8dfTcPcwbpBusx5VUASACCMs5xavSZ",
+		"/dns4/r-zw.algorand-mainnet.network/tcp/4190/p2p/12D3KooWFWYdKJeGgd6L6TJFXRL8ij1SYFfdkgCMt6RmLWPun6tk",
+		"/dns4/r-cj.algorand-mainnet.network/tcp/4190/p2p/12D3KooWKEkxtXT8WMWd4w6TzRrNy69bCRqPBg5a6XbhZRTFKDHu",
+		"/dns4/a-x1.algorand-mainnet.network/tcp/4190/p2p/12D3KooWHDgZcXgtKKjyAQVLXCTWdQfCVdBJc6p2oeaefLFPX4np",
+		"/dns4/a-yo.algorand-mainnet.network/tcp/4190/p2p/12D3KooWGaMTaDcJW3g5L9hy1VBcVX3qM8UqwpnFCNLjJTCatrRF",
+		"/dns4/a-c5.algorand-mainnet.network/tcp/4190/p2p/12D3KooWBn2DSe7tpt3ygLB62w8svPwpMYqTZeSLCFaMiu2jRoNM",
+	}
+
+	BootstrapPeersAlgorandTestNet = []string{}
+
+	BootstrapPeersAlgorandBetaNet = []string{
+		"/dns4/r4i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKMneU9q8P3h6hJkNv3e8dcy6LzXUHRJAggiL7jWkAt5s",
+		"/dns4/r1i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKriuBBQ7ubAs7KtqzfnmUBF5KzsbXHGnT5gSgytZ8oZP",
+		"/dns4/r3i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKc4sRxReuXdv5FqJzBR5mCcgj4KcdN4CbiNAkDX54TQF",
+		"/dns4/r5i.betanet.algodev.network/tcp/4192/p2p/12D3KooWH8zqyz9QY62J68T37dzwAxb3oB5UAMcDYmcxm4HV5Hie",
+		"/dns4/r2i.betanet.algodev.network/tcp/4192/p2p/12D3KooWQwMwcJxncuvAW53JU36BSMHoJvKnGekGkmjPL4PAsXKM",
+	}
+
 	// BootstrapPeersPactusFullNode extracted from:
 	//   https://github.com/pactus-project/pactus/blob/main/config/bootstrap.json
 	BootstrapPeersPactusFullNode = []string{
