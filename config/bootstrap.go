@@ -268,10 +268,13 @@ var (
 	}
 
 	BootstrapPeersAlgorandMainNet = []string{
+		//host -t txt _dnsaddr.mainnet.algonode.network
 		"/dns4/n1-mainnet.4160.nodely.io/tcp/14190/p2p/12D3KooWBHBjCPZEkHyre4NDFyVQm4GjkN4n766RiKpESboj4jEB",
 		"/dns4/n2-mainnet.4160.nodely.net/tcp/14190/p2p/12D3KooWNdhAQA1L8pSKQ2yJViVxRb6gw1Pp2URwTzDywY4hsai5",
 		"/dns4/n3-mainnet.4160.nodely.network/tcp/14190/p2p/12D3KooWAfN4hoQwjmYG8T6mxzkYVGpa24hzx4pp5zNboiBzy8xS",
 		"/dns4/n4-mainnet.4160.nodely.dev/tcp/14190/p2p/12D3KooWH3PQB4X9783fLupxf63Y5qohtSLh3c4RoZ4Ahxg4iVWD",
+		"/dns4/a1-mainnet.4160.nodely.net/tcp/4190/p2p/12D3KooWRLTse79PHDvGBrer21M8emW9dvETk7PJuEvNQBZo1sjq",
+		//host -t txt _dnsaddr.mainnet.algorand.network
 		"/dns4/r-vi.algorand-mainnet.network/tcp/4190/p2p/12D3KooWSdurxomMn38Fk6aqXY1FgWmMnththYxUXX8BNz8N5Kyk",
 		"/dns4/r-pn.algorand-mainnet.network/tcp/4190/p2p/12D3KooWAaPiWHx1CZcpZ4rQSDcpzsfMN5ecReLpWh5ZuReoxcnM",
 		"/dns4/r-ve.algorand-mainnet.network/tcp/4190/p2p/12D3KooWBusewMu14xEZQfHsCF9vnRvXwkK1wnwGK4nbrLQ3Ctoh",
@@ -284,14 +287,20 @@ var (
 		"/dns4/a-c5.algorand-mainnet.network/tcp/4190/p2p/12D3KooWBn2DSe7tpt3ygLB62w8svPwpMYqTZeSLCFaMiu2jRoNM",
 	}
 
-	BootstrapPeersAlgorandTestNet = []string{}
+	BootstrapPeersAlgorandTestNet = []string{
+		//host -t txt _dnsaddr.testnet.algorand.network
+		"/dns4/r-rr.algorand-testnet.network/tcp/4191/p2p/12D3KooWSnzbvNWbT98KDq4M8hQNtCLhVy6xLmMVT84arqL8h6mn",
+		"/dns4/r-f8.algorand-testnet.network/tcp/4191/p2p/12D3KooWGHvrZdbXHBtD2Za2RGBCEKRFVGk3FndZHnpfCMiZKHLy",
+		"/dns4/r-f9.algorand-testnet.network/tcp/4191/p2p/12D3KooWAfqMg7W7DkPt7oBhS5woVCDKATtzaLtW2WZC3d1Rn2VA",
+	}
 
 	BootstrapPeersAlgorandBetaNet = []string{
-		"/dns4/r4i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKMneU9q8P3h6hJkNv3e8dcy6LzXUHRJAggiL7jWkAt5s",
+		//host -t txt _dnsaddr.betanet.algodev.network
 		"/dns4/r1i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKriuBBQ7ubAs7KtqzfnmUBF5KzsbXHGnT5gSgytZ8oZP",
-		"/dns4/r3i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKc4sRxReuXdv5FqJzBR5mCcgj4KcdN4CbiNAkDX54TQF",
-		"/dns4/r5i.betanet.algodev.network/tcp/4192/p2p/12D3KooWH8zqyz9QY62J68T37dzwAxb3oB5UAMcDYmcxm4HV5Hie",
 		"/dns4/r2i.betanet.algodev.network/tcp/4192/p2p/12D3KooWQwMwcJxncuvAW53JU36BSMHoJvKnGekGkmjPL4PAsXKM",
+		"/dns4/r3i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKc4sRxReuXdv5FqJzBR5mCcgj4KcdN4CbiNAkDX54TQF",
+		"/dns4/r4i.betanet.algodev.network/tcp/4192/p2p/12D3KooWKMneU9q8P3h6hJkNv3e8dcy6LzXUHRJAggiL7jWkAt5s",
+		"/dns4/r5i.betanet.algodev.network/tcp/4192/p2p/12D3KooWH8zqyz9QY62J68T37dzwAxb3oB5UAMcDYmcxm4HV5Hie",
 	}
 
 	// BootstrapPeersPactusFullNode extracted from:
