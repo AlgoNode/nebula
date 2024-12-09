@@ -60,6 +60,10 @@ func (p PeerInfo) Merge(other PeerInfo) PeerInfo {
 	}
 }
 
+func (p PeerInfo) DeduplicationKey() string {
+	return p.AddrInfo.ID.String()
+}
+
 type CrawlDriverConfig struct {
 	Version        string
 	Network        config.Network
@@ -180,8 +184,9 @@ func (d *CrawlDriver) Close() {}
 
 func newLibp2pHost(userAgent string) (Host, error) {
 	// Configure the resource manager to not limit anything
+	var noSubnetLimit []rcmgr.ConnLimitPerSubnet
 	limiter := rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits)
-	rm, err := rcmgr.NewResourceManager(limiter)
+	rm, err := rcmgr.NewResourceManager(limiter, rcmgr.WithLimitPerSubnet(noSubnetLimit, noSubnetLimit))
 	if err != nil {
 		return nil, fmt.Errorf("new resource manager: %w", err)
 	}

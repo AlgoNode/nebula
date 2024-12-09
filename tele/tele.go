@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
+	"runtime"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -16,6 +17,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.19.0"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/atomic"
 )
 
@@ -47,7 +49,7 @@ func NewMeterProvider() (metric.MeterProvider, error) {
 // tracing.
 func NewTracerProvider(ctx context.Context, host string, port int) (trace.TracerProvider, error) {
 	if host == "" || port == 0 {
-		return trace.NewNoopTracerProvider(), nil
+		return noop.NewTracerProvider(), nil
 	}
 
 	exporter, err := otlptracegrpc.New(ctx,
@@ -73,6 +75,9 @@ func NewTracerProvider(ctx context.Context, host string, port int) (trace.Tracer
 func ListenAndServe(host string, port int) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	log.WithField("addr", addr).Debugln("Starting telemetry endpoint")
+
+	// profile 1% of contention events
+	runtime.SetMutexProfileFraction(1)
 
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/health", func(rw http.ResponseWriter, req *http.Request) {

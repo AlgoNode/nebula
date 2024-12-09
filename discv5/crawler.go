@@ -6,13 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	ma "github.com/multiformats/go-multiaddr"
 	log "github.com/sirupsen/logrus"
@@ -22,7 +23,6 @@ import (
 	"github.com/dennis-tra/nebula-crawler/core"
 	"github.com/dennis-tra/nebula-crawler/db"
 	"github.com/dennis-tra/nebula-crawler/db/models"
-	"github.com/dennis-tra/nebula-crawler/discvx"
 )
 
 const MaxCrawlRetriesAfterTimeout = 2 // magic
@@ -38,7 +38,7 @@ type Crawler struct {
 	id           string
 	cfg          *CrawlerConfig
 	host         *basichost.BasicHost
-	listener     *discvx.UDPv5
+	listener     *discover.UDPv5
 	crawledPeers int
 	done         chan struct{}
 }
@@ -64,6 +64,10 @@ func (c *Crawler) Work(ctx context.Context, task PeerInfo) (core.CrawlResult[Pee
 	discV5Result := <-discV5ResultCh
 
 	properties := c.PeerProperties(task.Node)
+
+	if libp2pResult.Transport != "" {
+		properties["transport"] = libp2pResult.Transport
+	}
 
 	if libp2pResult.ConnClosedImmediately {
 		properties["direct_close"] = true
@@ -174,8 +178,9 @@ type Libp2pResult struct {
 	Agent                 string
 	Protocols             []string
 	ListenAddrs           []ma.Multiaddr
-	ConnClosedImmediately bool // whether conn was no error but still unconnected
-	GenTCPAddr            bool // whether a TCP address was generated
+	Transport             string // the transport of a successful connection
+	ConnClosedImmediately bool   // whether conn was no error but still unconnected
+	GenTCPAddr            bool   // whether a TCP address was generated
 }
 
 func (c *Crawler) crawlLibp2p(ctx context.Context, pi PeerInfo) chan Libp2pResult {
@@ -196,31 +201,28 @@ func (c *Crawler) crawlLibp2p(ctx context.Context, pi PeerInfo) chan Libp2pResul
 			Addrs: sanitizedAddrs,
 		}
 
+		var conn network.Conn
 		result.ConnectStartTime = time.Now()
-		result.ConnectError = c.connect(ctx, addrInfo) // use filtered addr list
+		conn, result.ConnectError = c.connect(ctx, addrInfo) // use filtered addr list
 		result.ConnectEndTime = time.Now()
 
 		// If we could successfully connect to the peer we actually crawl it.
 		if result.ConnectError == nil {
 
-			// check if we're connected
-			if c.host.Network().Connectedness(pi.ID()) == network.NotConnected {
-				// this is a weird behavior I was obesrving. Libp2p reports a
-				// successful connection establishment but isn't connected right
-				// after the call returned. This point is not a big problem at this
-				// point because fetchNeighbors will open the connection again. This
-				// works more often than not but is still weird. At least keep track
-				// of these cases.
-				result.ConnClosedImmediately = true
+			// keep track of the transport of the open connection
+			result.Transport = conn.ConnState().Transport
 
-				// try it again one more time
-				if !c.isIdentified(addrInfo.ID) {
-					_ = c.connect(ctx, addrInfo)
-				}
+			// wait for the Identify exchange to complete (no-op if already done)
+			// the internal timeout is set to 30 s. When crawling we only allow 5s.
+			timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			select {
+			case <-timeoutCtx.Done():
+				// identification timed out.
+			case <-c.host.IDService().IdentifyWait(conn):
+				// identification may have succeeded.
 			}
-
-			// wait for the Identify exchange to complete
-			c.identifyWait(ctx, addrInfo)
 
 			// Extract information from peer store
 			ps := c.host.Peerstore()
@@ -265,9 +267,9 @@ func (c *Crawler) crawlLibp2p(ctx context.Context, pi PeerInfo) chan Libp2pResul
 }
 
 // connect establishes a connection to the given peer. It also handles metric capturing.
-func (c *Crawler) connect(ctx context.Context, pi peer.AddrInfo) error {
+func (c *Crawler) connect(ctx context.Context, pi peer.AddrInfo) (network.Conn, error) {
 	if len(pi.Addrs) == 0 {
-		return fmt.Errorf("skipping node as it has no public IP address") // change knownErrs map if changing this msg
+		return nil, fmt.Errorf("skipping node as it has no public IP address") // change knownErrs map if changing this msg
 	}
 
 	// init an exponential backoff
@@ -287,15 +289,18 @@ func (c *Crawler) connect(ctx context.Context, pi peer.AddrInfo) error {
 		})
 		logEntry.Debugln("Connecting to peer", pi.ID.ShortString())
 
+		// save addresses into the peer store temporarily
+		c.host.Peerstore().AddAddrs(pi.ID, pi.Addrs, peerstore.TempAddrTTL)
+
 		timeoutCtx, cancel := context.WithTimeout(ctx, c.cfg.DialTimeout)
-		err := c.host.Connect(timeoutCtx, pi)
+		conn, err := c.host.Network().DialPeer(timeoutCtx, pi.ID)
 		cancel()
 
 		if err == nil {
-			return nil
+			return conn, nil
 		}
 
-		switch true {
+		switch {
 		case strings.Contains(err.Error(), db.ErrorStr[models.NetErrorConnectionRefused]):
 			// Might be transient because the remote doesn't want us to connect. Try again!
 		case strings.Contains(err.Error(), db.ErrorStr[models.NetErrorConnectionGated]):
@@ -312,18 +317,18 @@ func (c *Crawler) connect(ctx context.Context, pi peer.AddrInfo) error {
 			// We already have too many open connections over a relay. Try again!
 		default:
 			logEntry.WithError(err).Debugln("Failed connecting to peer", pi.ID.ShortString())
-			return err
+			return nil, err
 		}
 
 		sleepDur := bo.NextBackOff()
 		if sleepDur == backoff.Stop {
 			logEntry.WithError(err).Debugln("Exceeded retries connecting to peer", pi.ID.ShortString())
-			return err
+			return nil, err
 		}
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-time.After(sleepDur):
 			retry += 1
 			continue
@@ -390,48 +395,6 @@ func sanitizeAddrs(maddrs []ma.Multiaddr) ([]ma.Multiaddr, bool) {
 	return maddrs, false
 }
 
-// identifyWait waits until any connection to a peer passed the Identify
-// exchange successfully or all identification attempts have failed.
-// The call to IdentifyWait returns immediately if the connection was
-// identified in the past. We detect a successful identification if an
-// AgentVersion is stored in the peer store
-func (c *Crawler) identifyWait(ctx context.Context, pi peer.AddrInfo) {
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second) // TODO: parameterize
-	defer cancel()
-
-	var wg sync.WaitGroup
-	for _, conn := range c.host.Network().ConnsToPeer(pi.ID) {
-		conn := conn
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			select {
-			case <-timeoutCtx.Done():
-			case <-c.host.IDService().IdentifyWait(conn):
-
-				// check if identification was successful by looking for
-				// the AgentVersion key. If it exists, we cancel the
-				// identification of the remaining connections.
-				if c.isIdentified(pi.ID) {
-					cancel()
-					return
-				}
-			}
-		}()
-	}
-
-	wg.Wait()
-}
-
-// isIdentified returns true if the given peer.ID was successfully identified.
-// Just because IdentifyWait returns doesn't mean the peer was identified.
-func (c *Crawler) isIdentified(pid peer.ID) bool {
-	agent, err := c.host.Peerstore().Get(pid, "AgentVersion")
-	return err == nil && agent.(string) != ""
-}
-
 type DiscV5Result struct {
 	// The time we received the first successful response
 	RespondedAt *time.Time
@@ -482,12 +445,12 @@ func (c *Crawler) crawlDiscV5(ctx context.Context, pi PeerInfo) chan DiscV5Resul
 		// internally, so we won't gain much by spawning multiple parallel go
 		// routines here. Stop the process as soon as we have received a timeout and
 		// don't let the following calls time out as well.
-		for i := 0; i <= discvx.NBuckets; i++ { // 17 is maximum
+		for i := 0; i <= discover.NBuckets; i++ { // 17 is maximum
 			var neighbors []*enode.Node
-			neighbors, err = c.listener.FindNode(pi.Node, []uint{uint(discvx.HashBits - i)})
+			neighbors, err = c.listener.FindNode(pi.Node, []uint{uint(discover.HashBits - i)})
 			if err != nil {
 
-				if errors.Is(err, discvx.ErrTimeout) {
+				if errors.Is(err, discover.ErrTimeout) {
 					timeouts += 1
 					if timeouts < MaxCrawlRetriesAfterTimeout {
 						continue

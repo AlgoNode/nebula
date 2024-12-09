@@ -8,7 +8,7 @@ all: clean build
 test:
 	# maxmind excluded because it requires a database
 	# discvx excluded because the tests take quite long and are copied from the prysm codebase
-	go test `go list ./... | grep -v maxmind | grep -v discvx`
+	go test `go list ./... | grep -v maxmind`
 
 build:
 	go build -ldflags "-X main.version=${VERSION} -X main.commit=${GIT_SHA} -X main.date=${DATE} -X main.builtBy=${USER}" -o dist/nebula github.com/dennis-tra/nebula-crawler/cmd/nebula
@@ -30,8 +30,8 @@ docker-push: docker-linux
 
 tools:
 	go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.15.2
-	go install github.com/volatiletech/sqlboiler/v4@v4.13.0
-	go install github.com/volatiletech/sqlboiler/v4/drivers/sqlboiler-psql@v4.13.0
+	go install github.com/volatiletech/sqlboiler/v4@v4.14.1
+	go install github.com/volatiletech/sqlboiler/v4/drivers/sqlboiler-psql@v4.14.1
 	go install go.uber.org/mock/mockgen@v0.3.0
 
 database-reset: database-stop databased migrate-up models

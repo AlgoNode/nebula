@@ -6,23 +6,27 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
+	"math"
 	"net"
+	"net/netip"
 	"runtime"
+	"sync"
 	"time"
 
 	secp256k1v4 "github.com/decred/dcrd/dcrec/secp256k1/v4"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/libp2p/go-libp2p"
+	mplex "github.com/libp2p/go-libp2p-mplex"
+	libp2pconfig "github.com/libp2p/go-libp2p/config"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
-	"github.com/libp2p/go-libp2p/p2p/muxer/mplex"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -35,7 +39,6 @@ import (
 	"github.com/dennis-tra/nebula-crawler/core"
 	"github.com/dennis-tra/nebula-crawler/db"
 	"github.com/dennis-tra/nebula-crawler/db/models"
-	"github.com/dennis-tra/nebula-crawler/discvx"
 	"github.com/dennis-tra/nebula-crawler/utils"
 )
 
@@ -43,6 +46,7 @@ type PeerInfo struct {
 	*enode.Node
 	peerID peer.ID
 	maddrs []ma.Multiaddr
+	enr    string
 }
 
 var _ core.PeerInfo[PeerInfo] = (*PeerInfo)(nil)
@@ -90,10 +94,28 @@ func NewPeerInfo(node *enode.Node) (PeerInfo, error) {
 		maddrs = append(maddrs, maddr)
 	}
 
+	if quicAddr, ok := node.QUICEndpoint(); ok {
+		addr := quicAddr.Addr()
+		if addr.Is4() {
+			ipScheme = "ip4"
+		} else {
+			ipScheme = "ip6"
+		}
+
+		maddrStr := fmt.Sprintf("/%s/%s/udp/%d/quic-v1", ipScheme, addr.String(), quicAddr.Port())
+		maddr, err := ma.NewMultiaddr(maddrStr)
+		if err != nil {
+			return PeerInfo{}, fmt.Errorf("parse multiaddress %s: %w", maddrStr, err)
+		}
+
+		maddrs = append(maddrs, maddr)
+	}
+
 	pi := PeerInfo{
 		Node:   node,
 		peerID: peerID,
 		maddrs: maddrs,
+		enr:    node.String(),
 	}
 
 	return pi, nil
@@ -112,6 +134,13 @@ func (p PeerInfo) Merge(other PeerInfo) PeerInfo {
 	return p
 }
 
+func (p PeerInfo) DeduplicationKey() string {
+	// TODO: this should probably be p.enr but a change here needs to
+	// be coordinated with changes to our analysis scripts, so I'm keeping it as
+	// it is.
+	return string(p.peerID)
+}
+
 type CrawlDriverConfig struct {
 	Version        string
 	TrackNeighbors bool
@@ -123,6 +152,8 @@ type CrawlDriverConfig struct {
 	MeterProvider  metric.MeterProvider
 	TracerProvider trace.TracerProvider
 	LogErrors      bool
+	UDPBufferSize  int
+	UDPRespTimeout time.Duration
 }
 
 func (cfg *CrawlDriverConfig) CrawlerConfig() *CrawlerConfig {
@@ -180,6 +211,9 @@ func NewCrawlDriver(dbc db.Client, crawl *models.Crawl, cfg *CrawlDriverConfig) 
 		return nil, fmt.Errorf("open in-memory peerstore: %w", err)
 	}
 
+	// set the discovery response timeout
+	discover.RespTimeoutV5 = cfg.UDPRespTimeout
+
 	return &CrawlDriver{
 		cfg:       cfg,
 		dbc:       dbc,
@@ -191,6 +225,9 @@ func NewCrawlDriver(dbc db.Client, crawl *models.Crawl, cfg *CrawlDriverConfig) 
 	}, nil
 }
 
+// NewWorker is called multiple times but only log the configured buffer sizes once
+var logOnce sync.Once
+
 func (d *CrawlDriver) NewWorker() (core.Worker[PeerInfo, core.CrawlResult[PeerInfo]], error) {
 	// If I'm not using the below elliptic curve, some Ethereum clients will reject communication
 	priv, err := ecdsa.GenerateKey(ethcrypto.S256(), crand.Reader)
@@ -198,19 +235,41 @@ func (d *CrawlDriver) NewWorker() (core.Worker[PeerInfo, core.CrawlResult[PeerIn
 		return nil, fmt.Errorf("new ethereum ecdsa key: %w", err)
 	}
 
-	ethNode := enode.NewLocalNode(d.peerstore, priv)
-
-	conn, err := net.ListenUDP("udp", nil)
-	if err != nil {
-		return nil, fmt.Errorf("listen on udp port: %w", err)
+	laddr := &net.UDPAddr{
+		IP:   net.ParseIP("0.0.0.0"),
+		Port: 0,
 	}
 
-	discv5Cfg := discvx.Config{
+	conn, err := net.ListenUDP("udp4", laddr)
+	if err != nil {
+		return nil, fmt.Errorf("listen on udp4 port: %w", err)
+	}
+
+	if err = conn.SetReadBuffer(d.cfg.UDPBufferSize); err != nil {
+		log.Warnln("Failed to set read buffer size on UDP listener", err)
+	}
+
+	rcvbuf, sndbuf, err := utils.GetUDPBufferSize(conn)
+	logOnce.Do(func() {
+		logEntry := log.WithFields(log.Fields{
+			"rcvbuf": rcvbuf,
+			"sndbuf": sndbuf,
+			"rcvtgt": d.cfg.UDPBufferSize, // receive target
+		})
+		if rcvbuf < d.cfg.UDPBufferSize {
+			logEntry.Warnln("Failed to increase UDP buffer sizes, using default")
+		} else {
+			logEntry.Infoln("Configured UDP buffer sizes")
+		}
+	})
+
+	ethNode := enode.NewLocalNode(d.peerstore, priv)
+
+	cfg := discover.Config{
 		PrivateKey:   priv,
 		ValidSchemes: enode.ValidSchemes,
 	}
-
-	listener, err := discvx.ListenV5(conn, ethNode, discv5Cfg)
+	listener, err := discover.ListenV5(conn, ethNode, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("listen discv5: %w", err)
 	}
@@ -221,7 +280,7 @@ func (d *CrawlDriver) NewWorker() (core.Worker[PeerInfo, core.CrawlResult[PeerIn
 	c := &Crawler{
 		id:       fmt.Sprintf("crawler-%02d", d.crawlerCount),
 		cfg:      d.cfg.CrawlerConfig(),
-		host:     h.(*basichost.BasicHost),
+		host:     h.(*libp2pconfig.ClosableBasicHost).BasicHost,
 		listener: listener,
 		done:     make(chan struct{}),
 	}
@@ -261,8 +320,24 @@ func (d *CrawlDriver) Close() {
 
 func newLibp2pHost(version string) (host.Host, error) {
 	// Configure the resource manager to not limit anything
+	var noSubnetLimit []rcmgr.ConnLimitPerSubnet
 	limiter := rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits)
-	rm, err := rcmgr.NewResourceManager(limiter)
+
+	v4PrefixLimits := []rcmgr.NetworkPrefixLimit{
+		{
+			Network:   netip.MustParsePrefix("0.0.0.0/0"),
+			ConnCount: math.MaxInt, // Unlimited
+		},
+	}
+
+	v6PrefixLimits := []rcmgr.NetworkPrefixLimit{
+		{
+			Network:   netip.MustParsePrefix("::1/0"),
+			ConnCount: math.MaxInt, // Unlimited
+		},
+	}
+
+	rm, err := rcmgr.NewResourceManager(limiter, rcmgr.WithLimitPerSubnet(noSubnetLimit, noSubnetLimit), rcmgr.WithNetworkPrefixLimit(v4PrefixLimits, v6PrefixLimits))
 	if err != nil {
 		return nil, fmt.Errorf("new resource manager: %w", err)
 	}

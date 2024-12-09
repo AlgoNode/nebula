@@ -42,6 +42,7 @@ var crawlConfig = &config.Crawl{
 	AddrDialTypeStr:  "public",
 	KeepENR:          false,
 	CheckExposed:     false,
+	UDPRespTimeout:   3 * time.Second,
 }
 
 // CrawlCommand contains the crawl sub-command configuration.
@@ -183,6 +184,14 @@ var CrawlCommand = &cli.Command{
 			Destination: &crawlConfig.KeepENR,
 			Category:    flagCategoryNetwork,
 		},
+		&cli.DurationFlag{
+			Name:        "udp-response-timeout",
+			Usage:       "ETHEREUM_EXECUTION: The response timeout for UDP requests in the disv4 DHT",
+			EnvVars:     []string{"NEBULA_CRAWL_UDP_RESPONSE_TIMEOUT"},
+			Value:       crawlConfig.UDPRespTimeout,
+			Destination: &crawlConfig.UDPRespTimeout,
+			Category:    flagCategoryNetwork,
+		},
 	},
 }
 
@@ -202,7 +211,7 @@ func CrawlAction(c *cli.Context) error {
 		return fmt.Errorf("new database client: %w", err)
 	}
 	defer func() {
-		if err := dbc.Close(); err != nil && !errors.Is(err, sql.ErrConnDone) {
+		if err := dbc.Close(); err != nil && !errors.Is(err, sql.ErrConnDone) && !strings.Contains(err.Error(), "use of closed network connection") {
 			log.WithError(err).Warnln("Failed closing database handle")
 		}
 	}()
@@ -227,7 +236,7 @@ func CrawlAction(c *cli.Context) error {
 	ctx = network.WithDialPeerTimeout(ctx, cfg.Root.DialTimeout)
 
 	// Allow transient connections. This way we can crawl a peer even if it is relayed.
-	ctx = network.WithUseTransient(ctx, "reach peers behind NATs")
+	ctx = network.WithAllowLimitedConn(ctx, "reach peers behind NATs")
 
 	// This is a custom configuration option that only exists in our fork of go-libp2p.
 	// see: https://github.com/plprobelab/go-libp2p/commit/f6d73ce3093ded293f0de032d239709069fac586
@@ -271,15 +280,19 @@ func CrawlAction(c *cli.Context) error {
 
 		// configure the crawl driver
 		driverCfg := &discv4.CrawlDriverConfig{
-			Version:        cfg.Root.Version(),
-			DialTimeout:    cfg.Root.DialTimeout,
-			TrackNeighbors: cfg.PersistNeighbors,
-			BootstrapPeers: bpEnodes,
-			AddrDialType:   cfg.AddrDialType(),
-			AddrTrackType:  cfg.AddrTrackType(),
-			TracerProvider: cfg.Root.TracerProvider,
-			MeterProvider:  cfg.Root.MeterProvider,
-			LogErrors:      cfg.Root.LogErrors,
+			Version:          cfg.Root.Version(),
+			DialTimeout:      cfg.Root.DialTimeout,
+			CrawlWorkerCount: cfg.CrawlWorkerCount,
+			TrackNeighbors:   cfg.PersistNeighbors,
+			BootstrapPeers:   bpEnodes,
+			AddrDialType:     cfg.AddrDialType(),
+			AddrTrackType:    cfg.AddrTrackType(),
+			TracerProvider:   cfg.Root.TracerProvider,
+			MeterProvider:    cfg.Root.MeterProvider,
+			LogErrors:        cfg.Root.LogErrors,
+			KeepENR:          cfg.KeepENR,
+			UDPBufferSize:    cfg.Root.UDPBufferSize,
+			UDPRespTimeout:   cfg.UDPRespTimeout,
 		}
 
 		// init the crawl driver
@@ -343,6 +356,8 @@ func CrawlAction(c *cli.Context) error {
 			TracerProvider: cfg.Root.TracerProvider,
 			MeterProvider:  cfg.Root.MeterProvider,
 			LogErrors:      cfg.Root.LogErrors,
+			UDPBufferSize:  cfg.Root.UDPBufferSize,
+			UDPRespTimeout: cfg.UDPRespTimeout,
 		}
 
 		// init the crawl driver

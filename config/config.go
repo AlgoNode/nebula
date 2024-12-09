@@ -120,6 +120,9 @@ type Root struct {
 	// TracerProvider is the tracer provider to use when initialising tracing
 	TracerProvider trace.TracerProvider
 
+	// The buffer size of the UDP sockets (applicable to ETHEREUM_{CONSENSUS,EXECUTION)
+	UDPBufferSize int
+
 	// The raw version of Nebula in the for X.Y.Z. Raw, because it's missing, e.g., commit information (set by GoReleaser or in Makefile)
 	RawVersion string
 
@@ -284,6 +287,9 @@ type Crawl struct {
 
 	// Whether to keep the full enr record alongside all parsed kv-pairs
 	KeepENR bool
+
+	// The UDP response timeout when crawling the discv4 and discv5 DHTs
+	UDPRespTimeout time.Duration
 }
 
 func (c *Crawl) AddrTrackType() AddrType {
