@@ -251,7 +251,7 @@ var (
 	}
 	// BootstrapPeersAvailMainnetLightClient
 	BootstrapPeersAvailMainnetLightClient = []string{
-		"/dns/bootnode.1.lightclient.mainnet.avail.so/tcp/37000/p2p/12D3KooW9x9qnoXhkHAjdNFu92kMvBRSiFBMAoC5NnifgzXjsuiM",
+		"/dns/bootnode.1.lightclient.mainnet.avail.so/tcp/37000/p2p/12D3KooWHgPbEYcvZvZz4aT3KiBdjQmphG5qJ9StWoUps1ofKbJx",
 	}
 
 	// BootstrapPeersAvailTuringLightClient
