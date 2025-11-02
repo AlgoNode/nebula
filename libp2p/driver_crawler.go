@@ -136,7 +136,7 @@ func NewCrawlDriver(dbc db.Client, cfg *CrawlDriverConfig) (*CrawlDriver, error)
 	// Spoof it
 	userAgent := "nebula/" + cfg.Version
 	if cfg.Network == config.NetworkAvailTuringLC || cfg.Network == config.NetworkAvailMainnetLC {
-		userAgent = "avail-light-client/light-client/1.13.0/rust-client"
+		userAgent = "avail-light-client/light-client/1.99.99/rust-client"
 	}
 
 	hosts := make(map[peer.ID]*Host, runtime.NumCPU())
