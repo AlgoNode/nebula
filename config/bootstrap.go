@@ -256,7 +256,7 @@ var (
 
 	// BootstrapPeersAvailTuringLightClient
 	BootstrapPeersAvailTuringLightClient = []string{
-		"/dns/bootnode.1.lightclient.turing.avail.so/tcp/37000/p2p/12D3KooWBkLsNGaD3SpMaRWtAmWVuiZg1afdNSPbtJ8M8r9ArGRT",
+		"/dns/bootnode.1.lightclient.turing.avail.so/tcp/37000/p2p/12D3KooWKK5KfQcec2Q6bLJnTo1UxuavrF8qnb48Ajtg6AJsRsJb",
 	}
 
 	// BootstrapPeersAvailTurin network extracted from:
